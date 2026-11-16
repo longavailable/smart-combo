@@ -1,0 +1,37 @@
+name: CI
+
+# 纯逻辑单测本来就能在本地跑，这里做的是"多 Node 版本 + 干净环境"的兜底，
+# 避免只在开发机上过。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 语法检查
+        run: node --check smart-combo.js
+
+      - name: 纯逻辑单测
+        run: npm test
+
+      # 浏览器 DOM 断言（test/browser.html）需要真实浏览器，故意不放进 CI：
+      # 装 Playwright + 起浏览器比整个单测都慢，而且偶发超时会误导"代码坏了"的判断。
+      # 改动 UI 行为时仍请本地打开 test/browser.html 跑一遍。

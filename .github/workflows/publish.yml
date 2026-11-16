@@ -1,0 +1,145 @@
+name: Publish to npm
+
+# 发布的判定不看"有没有推送"，只看"package.json 里的版本号是否已在 npm 上"。
+# 于是流程是：改版本号 → 合到 main → 自动发布；重复推送同一个版本号不会重复发布。
+# 打 tag（v*）或手动触发也同样走这一套判定。
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# 同一时刻只跑一个发布会话，避免两次推送并发抢同一个版本号
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write    # 发布成功后回写 tag
+  id-token: write    # provenance / npm Trusted Publishing
+
+jobs:
+  check:
+    name: 判断是否需要发布
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - id: v
+        name: 读版本号并查 npm
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package.json 里的版本：$VERSION"
+
+          # 由 tag 触发时，tag 与 package.json 必须一致，否则发出去的版本号和标记对不上
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$VERSION" ]; then
+            echo "::error title=tag 与版本号不一致::tag 是 ${GITHUB_REF_NAME}，package.json 是 $VERSION，拒绝发布"
+            exit 1
+          fi
+
+          # 已经发过就跳过：这让"每次推送 main"都安全，不会被重复推送逼出重复发布
+          if npm view "smart-combo@$VERSION" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=跳过::smart-combo@$VERSION 已在 npm 上，本次不发布"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=待发布::smart-combo@$VERSION 尚未发布"
+          fi
+
+  test:
+    name: test (node ${{ matrix.node }})
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --check smart-combo.js
+      - run: npm test
+
+  publish:
+    name: 发布到 npm
+    needs: [check, test]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # npm Trusted Publishing（OIDC，免 token）要求 npm >= 11.5；
+      # Node 22 自带的是 npm 10.x，所以显式升一次。
+      - name: 升级 npm
+        run: npm install -g npm@latest
+
+      - id: pub
+        name: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set +e
+          out=$(npm publish --access public --provenance 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+
+          if [ $rc -eq 0 ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 凭据没配好时不要把仓库点红 —— 这是配置缺口，不是代码缺陷，
+          # 但要在 Actions 摘要里说清楚缺什么、怎么补。
+          case "$out" in
+            *E401*|*ENEEDAUTH*|*E404*|*"need auth"*|*"Trusted Publisher"*)
+              echo "::warning title=跳过发布::没有可用的 npm 凭据，本次不发布。见下方「怎么让发布跑起来」。"
+              {
+                echo "### 跳过发布：缺 npm 凭据"
+                echo ""
+                echo "两种补法（任选其一）："
+                echo ""
+                echo "1. **免 token（推荐）**：到 npmjs.com → 该包 Settings → Trusted Publisher，"
+                echo "   填 GitHub Actions / 仓库 \`longavailable/smart-combo\` / workflow \`publish.yml\`。"
+                echo "2. **用 token**：npm 生成 Automation token，然后"
+                echo '   `gh secret set NPM_TOKEN -R longavailable/smart-combo`。'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+            *)
+              exit $rc
+              ;;
+          esac
+
+      - name: 回写 git tag
+        if: steps.pub.outputs.published == 'true'
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --tags origin "v$VERSION" | grep -q .; then
+            echo "tag v$VERSION 已存在，跳过"
+          else
+            git tag -a "v$VERSION" -m "smart-combo v$VERSION"
+            git push origin "v$VERSION"
+          fi

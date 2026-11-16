@@ -1,5 +1,9 @@
 # SmartCombo
 
+[![CI](https://github.com/longavailable/smart-combo/actions/workflows/ci.yml/badge.svg)](https://github.com/longavailable/smart-combo/actions/workflows/ci.yml)
+[![Publish](https://github.com/longavailable/smart-combo/actions/workflows/publish.yml/badge.svg)](https://github.com/longavailable/smart-combo/actions/workflows/publish.yml)
+[![在线示例](https://img.shields.io/badge/demo-live-2563eb)](https://longavailable.github.io/smart-combo/)
+
 **一个输入框 + 一个下拉。零依赖、无构建。** 两种模式：
 
 | 模式 | 用途 | 行为 |
@@ -282,6 +286,22 @@ DOM 行为（30 项：键盘、新建、IME、滚动跟随、销毁还原……�
 [`test/browser.html`](test/browser.html)，页面顶部会显示 `PASS / FAIL` 与逐条明细。
 
 改动 `smart-combo.css` 后刷新 [`index.html`](index.html) 看效果（浅色/深色可切换）。
+
+不下载任何东西也能看：`main` 分支根目录由 GitHub Pages 直出，
+[demo 页](https://longavailable.github.io/smart-combo/) 与
+[CDN 示例](https://longavailable.github.io/smart-combo/examples/cdn.html) 都在线。
+
+### 发布流程
+
+发布这件事由 [`.github/workflows/publish.yml`](.github/workflows/publish.yml) 管：
+
+- 触发：推 `main`、推 `v*` tag、发布 Release、手动触发。
+- 判定依据不是"推没推"，而是 **`package.json` 里的版本号是否已在 npm 上**——
+  重复推同一个版本号会被跳过，所以合到 `main` 是安全的。
+- 发布前先在三档 Node（18 / 20 / 22）上跑一遍单测；`tag` 触发时还会校验 tag 与版本号一致。
+- 发布成功后自动回写 `v<version>` 的 git tag。
+- 认证优先用 npm Trusted Publishing（OIDC，免 token）；也可配 `NPM_TOKEN` secret。
+  两者都没有时只报 `warning` 并跳过，不会把仓库点红。
 
 ---
 
