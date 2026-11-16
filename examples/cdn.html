@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartCombo · CDN 引入示例</title>
+<link rel="icon" href="data:,">
+
+<!-- ① 样式：把 0.1.0 换成你要的版本（生产锁死，见 README「版本号怎么写」） -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.css">
+
+<style>
+  body {
+    max-width: 620px; margin: 0 auto; padding: 40px 20px 80px;
+    font: 14px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2733; background: #f6f7f9;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { margin: 0 0 24px; color: #6b7686; font-size: 13px; }
+  .card {
+    background: #fff; border: 1px solid #e3e6eb; border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  label { display: block; font-size: 12px; color: #6b7686; margin-bottom: 6px; }
+
+  /* 组件的 .sc-wrap 默认是 inline-flex，会收缩成内容宽度；这里让它撑满卡片 */
+  .sc-wrap { width: 100%; }
+
+  /* CDN 的样式表万一没下来，输入框至少还像个输入框。
+     :where() 优先级为 0，正常加载时会被 .sc-wrap > .sc-input 完全盖掉，不会打架。 */
+  :where(#city, #tag) {
+    box-sizing: border-box; width: 100%; height: 32px; margin: 0; padding: 0 10px;
+    font: inherit; font-size: 13px; color: inherit; background: #fff;
+    border: 1px solid #d6dae1; border-radius: 6px;
+  }
+
+  .out {
+    margin: 10px 0 0; padding: 8px 10px; background: #f3f5f8; border-radius: 7px;
+    font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #6b7686;
+  }
+  .out b { color: #2563eb; }
+  pre {
+    margin: 0; padding: 12px 14px; background: #151a22; color: #e6e9ef;
+    border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  pre .c { color: #8d98a9; }
+  pre .s { color: #6cd39c; }
+  #boot-error {
+    padding: 12px 14px; margin-bottom: 14px; border-radius: 8px;
+    background: #fff4e5; border: 1px solid #f0c48a; color: #7a4b00; font-size: 13px;
+  }
+  #boot-error code { background: #fff; padding: 1px 4px; border-radius: 4px; }
+  .ver { color: #6b7686; font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+
+  <h1>CDN 引入示例</h1>
+  <p class="sub">整个页面只依赖两个 jsDelivr 文件，没有 npm install，也没有构建步骤。</p>
+
+  <!-- CDN 拿不到文件时给出可操作的提示，而不是让页面静默失效 -->
+  <div id="boot-error" hidden>
+    <b>没加载到 SmartCombo。</b>
+    常见原因：包还没发到 npm、版本号写错、或者当前网络访问不了 jsDelivr（此时样式表多半也没下来）。
+    可以把两个 <code>&lt;link&gt;/&lt;script&gt;</code> 换成
+    <code>https://unpkg.com/smart-combo@0.1.0/...</code>，
+    或直接把 <code>smart-combo.js</code> / <code>smart-combo.css</code> 拷到本地引用。
+  </div>
+
+  <div class="card">
+    <label for="city">城市（从清单里选）</label>
+    <input id="city" placeholder="城市名或代码">
+    <p class="out" id="out-city">value: <b>—</b></p>
+  </div>
+
+  <div class="card">
+    <label for="tag">标签（可以选，也可以现场新建）</label>
+    <input id="tag" placeholder="选择或输入新标签">
+    <p class="out" id="out-tag">value: <b>—</b></p>
+  </div>
+
+  <pre><span class="c">&lt;!-- 就这两条，样式 + 脚本 --&gt;</span>
+&lt;link rel=<span class="s">"stylesheet"</span> href=<span class="s">"https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.css"</span>&gt;
+&lt;script src=<span class="s">"https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.js"</span>&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  new SmartCombo(<span class="s">"#city"</span>, { options: [<span class="s">"北京"</span>, <span class="s">"上海"</span>, <span class="s">"深圳"</span>] });
+&lt;/script&gt;</pre>
+
+  <p class="ver" id="ver"></p>
+
+<!-- ② 脚本：同样是 jsDelivr 上那个文件，挂全局 SmartCombo，不需要 type="module" -->
+<script src="https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // 文件没下来（404 / 网络不通）时，后面的代码要能安全跳过
+  if (typeof SmartCombo === "undefined") {
+    document.getElementById("boot-error").hidden = false;
+    document.getElementById("ver").textContent = "SmartCombo 未加载";
+    return;
+  }
+
+  function show(id, value) {
+    document.getElementById(id).innerHTML = "value: <b>"
+      + (value === "" || value == null ? "—" : String(value).replace(/</g, "&lt;")) + "</b>";
+  }
+
+  new SmartCombo("#city", {
+    options: [
+      { value: "110000", label: "北京" },
+      { value: "310000", label: "上海" },
+      { value: "440300", label: "深圳" }
+    ],
+    mode: "select",
+    placeholder: "城市名或代码",
+    onChange: function (v) { show("out-city", v); }
+  });
+
+  new SmartCombo("#tag", {
+    options: ["前端", "后端", "设计", "测试"],
+    mode: "create",
+    placeholder: "选择或输入新标签",
+    createLabel: "＋ 新建标签 “{value}”",
+    onChange: function (v) { show("out-tag", v); }
+  });
+
+  document.getElementById("ver").textContent =
+    "已从 CDN 加载 SmartCombo v" + SmartCombo.version;
+})();
+</script>
+</body>
+</html>

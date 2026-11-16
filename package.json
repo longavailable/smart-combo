@@ -1,0 +1,48 @@
+{
+  "name": "smart-combo",
+  "version": "0.1.0",
+  "description": "Zero-dependency combobox: one text input + one filterable dropdown, with an optional \"create a new option\" mode.",
+  "main": "smart-combo.js",
+  "style": "smart-combo.css",
+  "exports": {
+    ".": "./smart-combo.js",
+    "./smart-combo.css": "./smart-combo.css"
+  },
+  "files": [
+    "smart-combo.js",
+    "smart-combo.css",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --test test/unit.test.js",
+    "test:browser": "node -e \"console.log('打开 test/browser.html 即可跑 DOM 断言（无需构建）')\""
+  },
+  "keywords": [
+    "combobox",
+    "autocomplete",
+    "typeahead",
+    "select",
+    "dropdown",
+    "input",
+    "allow-create",
+    "filterable",
+    "vanilla-js",
+    "no-dependencies",
+    "accessible"
+  ],
+  "license": "MIT",
+  "author": "Bruce",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/longavailable/smart-combo.git"
+  },
+  "homepage": "https://github.com/longavailable/smart-combo#readme",
+  "bugs": {
+    "url": "https://github.com/longavailable/smart-combo/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

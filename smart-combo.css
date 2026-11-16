@@ -1,0 +1,227 @@
+/*!
+ * SmartCombo v0.1.0 — styles
+ * MIT License
+ *
+ * Everything is driven by CSS custom properties. Override them on :root, on a
+ * container, or on a single `.sc-wrap` to theme one instance:
+ *
+ *   .my-form { --sc-primary: #0f766e; --sc-radius: 8px; }
+ *
+ * Dark mode: add `[data-theme="dark"]` on <html>/<body> (or put `.sc-dark` on
+ * any ancestor of the input and the popup).
+ */
+
+:where(.sc-wrap, .sc-pop) {
+  --sc-font: inherit;
+  --sc-fg: #1f2733;
+  --sc-fg-muted: #6b7686;
+  --sc-bg: #fff;
+  --sc-bg-disabled: #f4f5f7;
+  --sc-border: #d6dae1;
+  --sc-border-hover: #b8bfc9;
+  --sc-primary: #2563eb;
+  --sc-primary-soft: #e8f1fb;
+  --sc-pop-bg: #fff;
+  --sc-pop-border: #dfe3ea;
+  --sc-shadow: 0 8px 24px rgba(23, 32, 48, .14), 0 2px 6px rgba(23, 32, 48, .08);
+  --sc-radius: 6px;
+  --sc-row-h: 30px;
+  --sc-z: 2147483000;
+}
+
+:where([data-theme="dark"], .sc-dark) :where(.sc-wrap, .sc-pop),
+:where([data-theme="dark"], .sc-dark):where(.sc-wrap, .sc-pop) {
+  --sc-fg: #e6e9ef;
+  --sc-fg-muted: #8d98a9;
+  --sc-bg: #1b2029;
+  --sc-bg-disabled: #242a35;
+  --sc-border: #38414f;
+  --sc-border-hover: #4a5566;
+  --sc-primary: #6aa5ff;
+  --sc-primary-soft: #22334d;
+  --sc-pop-bg: #1f2530;
+  --sc-pop-border: #38414f;
+  --sc-shadow: 0 10px 28px rgba(0, 0, 0, .55);
+}
+
+/* ------------------------------------------------------------------- field */
+
+.sc-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  max-width: 100%;
+  font: var(--sc-font);
+  color: var(--sc-fg);
+}
+
+.sc-wrap > .sc-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  margin: 0;
+  padding: 0 24px 0 8px;          /* room for the caret */
+  font: inherit;
+  font-size: 13px;
+  line-height: 28px;
+  color: var(--sc-fg);
+  background: var(--sc-bg);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  outline: none;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+
+/* two trailing buttons instead of one */
+.sc-wrap.has-value.is-clearable > .sc-input,
+.sc-wrap.is-clearable > .sc-input { padding-right: 42px; }
+
+.sc-wrap > .sc-input::placeholder { color: var(--sc-fg-muted); opacity: 1; }
+.sc-wrap > .sc-input:hover { border-color: var(--sc-border-hover); }
+.sc-wrap > .sc-input:focus {
+  border-color: var(--sc-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc-primary) 18%, transparent);
+}
+
+.sc-wrap.has-created > .sc-input { border-style: dashed; }
+
+.sc-wrap.is-disabled { opacity: .6; }
+.sc-wrap.is-disabled > .sc-input {
+  background: var(--sc-bg-disabled);
+  cursor: not-allowed;
+}
+.sc-wrap.is-readonly > .sc-input { background: var(--sc-bg-disabled); }
+
+/* --------------------------------------------------------------- caret/✕ */
+
+.sc-wrap > .sc-caret,
+.sc-wrap > .sc-clear {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sc-fg-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color .12s ease, background .12s ease, transform .15s ease;
+}
+
+.sc-wrap > .sc-caret { right: 4px; }
+.sc-wrap > .sc-caret svg { width: 10px; height: 6px; display: block; }
+.sc-wrap > .sc-caret:hover { color: var(--sc-fg); }
+.sc-wrap.is-open > .sc-caret { transform: translateY(-50%) rotate(180deg); }
+
+.sc-wrap > .sc-clear { right: 22px; font-size: 10px; }
+.sc-wrap > .sc-clear:hover { color: #d33; background: color-mix(in srgb, #d33 12%, transparent); }
+
+.sc-wrap.is-disabled > .sc-caret,
+.sc-wrap.is-disabled > .sc-clear { cursor: not-allowed; }
+
+/* hide the ✕ until there is something to clear */
+.sc-wrap > .sc-clear { display: none; }
+.sc-wrap.has-value > .sc-clear { display: inline-flex; }
+
+/* ----------------------------------------------------------------- popup */
+
+.sc-pop {
+  position: fixed;
+  z-index: var(--sc-z, 2147483000);
+  box-sizing: border-box;
+  display: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;       /* the page behind must not scroll along */
+  min-width: 80px;
+  padding: 3px;
+  font: var(--sc-font);
+  color: var(--sc-fg);
+  background: var(--sc-pop-bg);
+  border: 1px solid var(--sc-pop-border);
+  border-radius: var(--sc-radius);
+  box-shadow: var(--sc-shadow);
+  animation: sc-pop-in .1s ease-out;
+}
+
+.sc-pop.is-open { display: block; }
+
+@keyframes sc-pop-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-pop { animation: none; }
+}
+
+.sc-list { display: block; }
+
+.sc-opt {
+  display: block;
+  box-sizing: border-box;
+  min-height: var(--sc-row-h, 30px);
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--sc-fg);
+  border-radius: calc(var(--sc-radius) - 2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sc-opt.is-active,
+.sc-opt:hover { background: var(--sc-primary-soft); }
+
+.sc-opt.is-selected { color: var(--sc-primary); font-weight: 600; }
+
+.sc-opt.is-disabled {
+  color: var(--sc-fg-muted);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.sc-opt--create {
+  color: var(--sc-primary);
+  border-top: 1px solid var(--sc-pop-border);
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+.sc-opt--create.is-active,
+.sc-opt--create:hover {
+  background: color-mix(in srgb, var(--sc-primary) 12%, transparent);
+}
+
+.sc-opt.is-created::after {
+  content: "新";
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--sc-primary);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  vertical-align: 1px;
+}
+
+.sc-msg {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--sc-fg-muted);
+  cursor: default;
+  user-select: none;
+}

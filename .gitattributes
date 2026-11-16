@@ -1,0 +1,12 @@
+# 统一按 LF 存储 + 检出：源码要在 Windows / macOS / Linux / CI 之间字节一致，
+# 避免某台机器用 CRLF 检出后再提交，产生整文件 diff。
+* text=auto eol=lf
+
+*.js           text eol=lf
+*.css          text eol=lf
+*.html         text eol=lf
+*.md           text eol=lf
+*.json         text eol=lf
+LICENSE        text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SmartCombo · 浏览器自测</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../smart-combo.css">
+<style>
+  body { font: 13px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+         margin: 0; padding: 24px 28px 60px; color: #1f2733; background: #f6f7f9; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: #6b7686; font-size: 12.5px; margin-bottom: 18px; }
+  #summary { font-weight: 700; margin: 14px 0 10px; font-size: 14px; }
+  #summary.pass { color: #0a7d55; }
+  #summary.fail { color: #c0392b; }
+  ol { padding-left: 22px; margin: 0; }
+  li { padding: 2px 0; }
+  li.ok { color: #0a7d55; }
+  li.no { color: #c0392b; }
+  li code { font-size: 12px; color: #8a3b00; }
+  #stage { margin-top: 22px; padding: 12px; background: #fff; border: 1px dashed #d6dae1; border-radius: 8px; }
+  #stage label { display: block; font-size: 12px; color: #6b7686; margin: 8px 0 3px; }
+</style>
+</head>
+<body>
+<h1>SmartCombo 浏览器自测</h1>
+<div class="sub">直接打开本文件即可运行；全部断言通过时页面顶部会显示绿色 PASS。</div>
+<div id="summary">运行中…</div>
+<ol id="list"></ol>
+<div id="stage"></div>
+
+<script src="../smart-combo.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var queue = [];
+  function t(name, fn) { queue.push({ name: name, fn: fn }); }
+  function ok(cond, msg) { if (!cond) throw new Error(msg || "断言失败"); }
+  function eq(actual, expect, msg) {
+    if (String(actual) !== String(expect)) {
+      throw new Error((msg || "") + " 期望「" + expect + "」实际「" + actual + "」");
+    }
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var seq = 0;
+  function mkInput(placeholder) {
+    var wrap = document.createElement("div");
+    var label = document.createElement("label");
+    label.textContent = "case " + (++seq);
+    var el = document.createElement("input");
+    el.id = "ti" + seq;
+    el.placeholder = placeholder || "";
+    wrap.appendChild(label);
+    wrap.appendChild(el);
+    document.getElementById("stage").appendChild(wrap);
+    return el;
+  }
+
+  // keyCode is read-only in Chrome's KeyboardEvent init — patch it in
+  function key(el, code, keyName) {
+    var e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: keyName || "" });
+    Object.defineProperty(e, "keyCode", { get: function () { return code; } });
+    el.dispatchEvent(e);
+    return e;
+  }
+  function type(el, text) {
+    el.value = text;
+    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  }
+  function clickRow(row) {
+    row.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+  }
+  function rows(sc) { return sc.getPopup().querySelectorAll(".sc-opt"); }
+  function texts(sc) {
+    return Array.prototype.map.call(rows(sc), function (r) { return r.textContent; });
+  }
+  function opts(n) { var a = []; for (var i = 1; i <= n; i++) a.push("item-" + i); return a; }
+
+  /* ------------------------------------------------ 1. 结构 */
+
+  t("初始化：生成 wrap / 隐藏 input / 浮层挂在 body", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a", "b"], name: "f1" });
+    ok(el.parentNode.classList.contains("sc-wrap"), "输入框应被包进 .sc-wrap");
+    ok(el.getAttribute("role") === "combobox", "role=combobox");
+    eq(el.getAttribute("aria-expanded"), "false", "初始 aria-expanded");
+    ok(document.body.contains(sc.getPopup()), "浮层必须挂在 body 上（否则被 overflow 裁掉）");
+    ok(sc.getPopup().parentNode === document.body, "浮层父节点应为 body");
+    var hidden = el.parentNode.querySelector("input[type=hidden]");
+    ok(hidden && hidden.name === "f1", "应生成同名隐藏 input");
+    ok(document.getElementById(el.getAttribute("aria-controls")) === sc.getPopup().querySelector(".sc-list"),
+      "aria-controls 应指向 listbox");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 2. 打开 / 筛选 */
+
+  t("聚焦即打开，候选与 options 一致", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: opts(5) });
+    el.focus();
+    eq(el.getAttribute("aria-expanded"), "true", "聚焦后应展开");
+    eq(rows(sc).length, 5, "候选行数");
+    eq(texts(sc)[0], "item-1", "第一行");
+    sc.destroy();
+  });
+
+  t("maxRender 限制渲染条数，并提示还有多少项", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: opts(300), maxRender: 20 });
+    sc.open(true);
+    eq(rows(sc).length, 20, "只渲染 20 行");
+    var msg = sc.getPopup().querySelector(".sc-msg");
+    ok(msg && msg.textContent.indexOf("280") !== -1, "应提示剩余 280 项，实际：" + (msg && msg.textContent));
+    sc.destroy();
+  });
+
+  t("输入即筛选（子串、忽略大小写）", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["Alpha", "beta", "GAMMA"] });
+    el.focus();
+    type(el, "a");
+    ok(texts(sc).length >= 2, "含 a 的应筛出多条，实际 " + texts(sc).join(","));
+    type(el, "gamma");
+    eq(rows(sc).length, 1, "只剩 1 条");
+    eq(texts(sc)[0], "GAMMA", "命中项");
+    sc.destroy();
+  });
+
+  t("点箭头 = 显示全部；之后敲字立刻恢复筛选", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a-1", "a-2", "b-1"] });
+    sc.setValue("a-1");
+    el.focus();
+    eq(rows(sc).length, 3, "带值打开时默认列全部，而不是被值筛成一行");
+    type(el, "b");
+    eq(rows(sc).length, 1, "敲字后应恢复筛选");
+    eq(texts(sc)[0], "b-1", "命中 b-1");
+    sc.close();
+    el.parentNode.querySelector(".sc-caret")
+      .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+    ok(sc._isOpen(), "点箭头展开");
+    eq(rows(sc).length, 3, "箭头展开忽略输入框里的字");
+    sc.destroy();
+  });
+
+  t("无匹配时显示空状态文案", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a", "b"] });
+    el.focus();
+    type(el, "zzz");
+    eq(rows(sc).length, 0, "不应有候选行");
+    var msg = sc.getPopup().querySelector(".sc-msg");
+    ok(msg && msg.textContent === "没有匹配项", "空状态文案");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 3. 键盘 */
+
+  t("↓ 移动高亮，Enter 选中并回填标签", function () {
+    var el = mkInput();
+    var got = [];
+    var sc = new SmartCombo(el, {
+      options: [{ value: "1", label: "一号" }, { value: "2", label: "二号" }, { value: "3", label: "三号" }],
+      onChange: function (v, item) { got.push([v, item && item.label]); }
+    });
+    el.focus();
+    key(el, 40, "ArrowDown");            // 第一行 → 第二行
+    key(el, 40, "ArrowDown");            // → 第三行
+    var e = key(el, 13, "Enter");
+    ok(e.defaultPrevented, "Enter 在展开时应 preventDefault");
+    eq(sc.getValue(), "3", "选中的 value");
+    eq(el.value, "三号", "输入框显示 label 而不是 value");
+    eq(got.length, 1, "onChange 应触发一次");
+    eq(el.getAttribute("aria-expanded"), "false", "选中后收起");
+    sc.destroy();
+  });
+
+  t("Tab 提交并把焦点交出去（不 preventDefault）", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["x1", "x2"] });
+    el.focus();
+    type(el, "x2");
+    var e = key(el, 9, "Tab");
+    ok(!e.defaultPrevented, "Tab 不能被吞掉");
+    eq(sc.getValue(), "x2", "Tab 应提交当前匹配值");
+    sc.destroy();
+  });
+
+  t("Esc 关闭并还原为上一个有效值", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["p1", "p2"] });
+    el.focus();
+    clickRow(rows(sc)[1]);
+    eq(sc.getValue(), "p2", "先选中 p2");
+    el.focus();
+    type(el, "p9zz");
+    key(el, 27, "Escape");
+    eq(el.value, "p2", "Esc 后输入框应还原");
+    eq(sc.getValue(), "p2", "值不变");
+    sc.destroy();
+  });
+
+  t("点击候选行（pointerdown）即选中", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["m1", "m2", "m3"] });
+    el.focus();
+    clickRow(rows(sc)[2]);
+    eq(sc.getValue(), "m3", "点第 3 行");
+    eq(el.value, "m3", "回填");
+    sc.destroy();
+  });
+
+  t("回车选定后，再点同一个输入框仍能重新展开", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["k1", "k2"] });
+    el.focus();
+    key(el, 40, "ArrowDown");
+    key(el, 13, "Enter");
+    ok(!sc._isOpen(), "选定后收起");
+    eq(document.activeElement === el, true, "焦点仍在输入框里（所以不会再触发 focus）");
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    ok(sc._isOpen(), "点击应重新展开，否则用户点了没反应");
+    eq(rows(sc).length, 2, "候选完整");
+    sc.destroy();
+  });
+
+  t("disabled 候选跳过且不可点选", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, {
+      options: [{ value: "a", label: "A" }, { value: "b", label: "B", disabled: true }, { value: "c", label: "C" }]
+    });
+    el.focus();
+    ok(rows(sc)[1].classList.contains("is-disabled"), "应标出 disabled");
+    ok(rows(sc)[1].getAttribute("aria-disabled") === "true", "aria-disabled");
+    clickRow(rows(sc)[1]);
+    eq(sc.getValue(), "", "点 disabled 不应选中");
+    sc.close();                          // 从确定状态起步：键盘导航
+    key(el, 40, "ArrowDown");            // 打开并高亮 A
+    key(el, 40, "ArrowDown");            // 跳过 B → C
+    eq(sc._rows[sc._active].item.value, "c", "键盘应跳过 disabled");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 4. 两种模式 */
+
+  t("模式 select：清单外的文本在失焦时退回上一个有效值", function () {
+    var el = mkInput();
+    var invalid = [];
+    var sc = new SmartCombo(el, {
+      options: ["s1", "s2"],
+      onInvalid: function (text) { invalid.push(text); }
+    });
+    el.focus();
+    type(el, "s1");
+    key(el, 13, "Enter");
+    eq(sc.getValue(), "s1", "先选 s1");
+    el.focus();
+    type(el, "s9");
+    el.blur();
+    eq(el.value, "s1", "失焦后应退回 s1");
+    eq(sc.getValue(), "s1", "值仍是 s1");
+    eq(invalid.length, 1, "onInvalid 应被调用一次");
+    sc.destroy();
+  });
+
+  t("模式 create：出现新建行，Enter 生成新选项并留在候选里", function () {
+    var el = mkInput();
+    var created = [];
+    var sc = new SmartCombo(el, {
+      options: ["上海"],
+      mode: "create",
+      onCreate: function (text) { created.push(text); }
+    });
+    el.focus();
+    type(el, "重庆");
+    var createRow = sc.getPopup().querySelector(".sc-opt--create");
+    ok(createRow, "应出现新建行");
+    eq(createRow.textContent, "＋ 新建 “重庆”", "默认新建文案");
+    key(el, 13, "Enter");
+    eq(sc.getValue(), "重庆", "值 = 新文本");
+    eq(created.length, 1, "onCreate 触发");
+    eq(sc.getOptions().length, 2, "新选项并入候选清单");
+    sc.open(true);
+    eq(rows(sc).length, 2, "再次展开能看到新选项");
+    ok(rows(sc)[1].classList.contains("is-created"), "新建项应带标记");
+    sc.destroy();
+  });
+
+  t("模式 create：已有同名项时不再提示新建", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["abc"], mode: "create" });
+    el.focus();
+    type(el, "abc");
+    ok(!sc.getPopup().querySelector(".sc-opt--create"), "完全同名不应出现新建行");
+    sc.destroy();
+  });
+
+  t("keepCreated:false → 新建的值不并入候选", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a"], mode: "create", keepCreated: false });
+    el.focus();
+    type(el, "zzz");
+    key(el, 13, "Enter");
+    eq(sc.getValue(), "zzz", "值仍然是新文本");
+    eq(sc.getOptions().length, 1, "候选没有增加");
+    sc.destroy();
+  });
+
+  t("allowFree:true → select 模式也接受自由文本", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a"], allowFree: true });
+    el.focus();
+    type(el, "free-text");
+    el.blur();
+    eq(sc.getValue(), "free-text", "允许自由值");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 5. 中文输入法 */
+
+  t("中文输入法合成期间不筛选、不提交，结束后才刷新", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["上海", "深圳"], mode: "create" });
+    el.focus();
+    el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    el.value = "shang";                                 // 拼音阶段
+    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    eq(sc.getValue(), "", "合成中不应提交");
+    el.value = "上";
+    el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    eq(sc._query, "上", "合成结束后 query 应取输入框内容");
+    // mode=create 时「上」还会多出一行新建候选，这里只看命中项
+    var hit = sc.getPopup().querySelectorAll(".sc-opt:not(.sc-opt--create)");
+    eq(hit.length, 1, "合成结束后应按「上」筛选（实际候选：" + texts(sc).join(",") + "）");
+    eq(hit[0].textContent, "上海", "命中上海");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 6. 异步 / 动态候选 */
+
+  t("异步候选源：先显示加载中，再出结果", async function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, {
+      options: function (q) {
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(["远-" + (q || "全部")]); }, 30);
+        });
+      }
+    });
+    el.focus();
+    var msg = sc.getPopup().querySelector(".sc-msg");
+    ok(msg && msg.textContent === "加载中…", "应先显示加载中");
+    await sleep(80);
+    eq(rows(sc).length, 1, "结果到达后渲染");
+    eq(texts(sc)[0], "远-全部", "内容来自异步源");
+    sc.destroy();
+  });
+
+  t("setOptions：整体换候选（按行下发）", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["旧1", "旧2"] });
+    sc.setValue("旧2");
+    eq(el.value, "旧2", "先有值");
+    sc.setOptions(["新1", "新2", "新3"]);
+    eq(sc.getOptions().length, 3, "候选已替换");
+    sc.open(true);
+    eq(rows(sc).length, 3, "浮层同步");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 7. 表单 / 位置 / 销毁 */
+
+  t("隐藏 input 携带 value 而不是 label", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, {
+      options: [{ value: "310000", label: "上海" }],
+      name: "city"
+    });
+    sc.setValue("310000");
+    eq(el.value, "上海", "可见框显示 label");
+    var hidden = el.parentNode.querySelector("input[type=hidden]");
+    eq(hidden.value, "310000", "隐藏框携带 value");
+    sc.destroy();
+  });
+
+  t("浮层始终落在视口内（底部空间不足时上翻）", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: opts(40) });
+    el.style.marginTop = "0";
+    document.getElementById("stage").style.height = "3000px";
+    el.focus();
+    sc.open();
+    var r = sc.getPopup().getBoundingClientRect();
+    ok(r.left >= 0 && r.right <= document.documentElement.clientWidth + 1, "水平不出界：" + r.left + "~" + r.right);
+    ok(r.top >= 0 && r.bottom <= document.documentElement.clientHeight + 1, "垂直不出界：" + r.top + "~" + r.bottom);
+    ok(r.height > 40, "有可见高度：" + r.height);
+    document.getElementById("stage").style.height = "";
+    sc.destroy();
+  });
+
+  t("clearable：有值才显示 ✕，点击清空并触发 onChange", function () {
+    var el = mkInput();
+    var got = [];
+    var sc = new SmartCombo(el, {
+      options: ["c1", "c2"], clearable: true,
+      onChange: function (v) { got.push(v); }
+    });
+    var clear = el.parentNode.querySelector(".sc-clear");
+    ok(clear, "应生成清空按钮");
+    eq(getComputedStyle(clear).display, "none", "无值时不显示");
+    sc.setValue("c1");
+    ok(getComputedStyle(clear).display !== "none", "有值后显示");
+    clear.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+    eq(sc.getValue(), "", "清空");
+    eq(el.value, "", "输入框清空");
+    ok(got.indexOf("") !== -1, "onChange 收到空值");
+    sc.destroy();
+  });
+
+  t("destroy：拆干净（还原 DOM、移除浮层、解绑）", function () {
+    var el = mkInput();
+    var parent = el.parentNode;
+    var sc = new SmartCombo(el, { options: ["a"] });
+    var pop = sc.getPopup();
+    sc.destroy();
+    ok(el.parentNode === parent, "输入框回到原父节点");
+    ok(!document.body.contains(pop), "浮层已从 body 移除");
+    ok(!el.classList.contains("sc-input"), "类名已清");
+    ok(el.getAttribute("role") === null, "aria 已清");
+    el.focus();
+    ok(!document.body.querySelector(".sc-pop.is-open"), "销毁后不再有浮层");
+  });
+
+  t("同一 input 重复实例化会先销毁旧的", function () {
+    var el = mkInput();
+    var a = new SmartCombo(el, { options: ["1"] });
+    var b = new SmartCombo(el, { options: ["2"] });
+    ok(a._destroyed, "旧实例已销毁");
+    ok(!b._destroyed, "新实例可用");
+    ok(SmartCombo.get(el) === b, "SmartCombo.get 返回当前实例");
+    b.destroy();
+  });
+
+  t("disabled / readonly 时打不开", function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: ["a"], disabled: true });
+    ok(!sc.open()._isOpen(), "disabled 不应展开");
+    sc.setDisabled(false);
+    sc.setReadonly(true);
+    ok(!sc.open()._isOpen(), "readonly 不应展开");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ 8. 浮层生命周期 */
+
+  t("同一时刻只允许一个浮层打开", function () {
+    var el1 = mkInput();
+    var el2 = mkInput();
+    var a = new SmartCombo(el1, { options: ["a"] });
+    var b = new SmartCombo(el2, { options: ["b"] });
+    a.open();
+    ok(a._isOpen(), "a 已打开");
+    b.open();
+    ok(!a._isOpen(), "b 打开时 a 必须收起（否则两个浮层叠在一起）");
+    ok(b._isOpen(), "b 打开");
+    a.destroy(); b.destroy();
+  });
+
+  t("点页面其他位置：收起浮层并落值", function () {
+    var el = mkInput();
+    var outside = document.createElement("button");
+    outside.textContent = "别处";
+    document.getElementById("stage").appendChild(outside);
+    var sc = new SmartCombo(el, { options: ["o1", "o2"] });
+    el.focus();
+    type(el, "o2");
+    outside.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+    ok(!sc._isOpen(), "浮层应收起");
+    eq(sc.getValue(), "o2", "落值仍要发生（点别处 = 提交）");
+    sc.destroy();
+    outside.remove();
+  });
+
+  t("滚动祖先容器：浮层跟着输入框走，输入框被滚出可见区才收起", async function () {
+    var box = document.createElement("div");
+    box.style.cssText = "height:60px;overflow:auto;border:1px solid #ccc";
+    var el = document.createElement("input");
+    el.id = "scroll-case";
+    var spacer = document.createElement("div");
+    spacer.style.height = "400px";
+    box.appendChild(el);
+    box.appendChild(spacer);
+    document.getElementById("stage").appendChild(box);
+
+    var sc = new SmartCombo(el, { options: opts(20) });
+    el.focus();
+    ok(sc._isOpen(), "先打开");
+
+    var beforeTop = sc.getPopup().getBoundingClientRect().top;
+    box.scrollTop = 10;                  // 输入框仍部分可见
+    await sleep(80);
+    ok(sc._isOpen(), "容器内小幅滚动不应收起浮层（fixed 浮层要跟着锚点走）");
+    var ir = el.getBoundingClientRect();
+    var pr = sc.getPopup().getBoundingClientRect();
+    ok(pr.top !== beforeTop || pr.top > 0, "浮层已重新定位");
+    ok(Math.abs(pr.top - (ir.bottom + 2)) < 40 || Math.abs(pr.bottom - (ir.top - 2)) < 40,
+      "浮层仍贴着输入框：popup " + Math.round(pr.top) + "~" + Math.round(pr.bottom)
+      + " vs input " + Math.round(ir.top) + "~" + Math.round(ir.bottom));
+
+    box.scrollTop = 300;                 // 输入框被滚出容器可见区
+    await sleep(80);
+    ok(!sc._isOpen(), "输入框离开可见区后应收起");
+    sc.destroy();
+    box.remove();
+  });
+
+  t("resize 后浮层重新定位，仍在视口内", async function () {
+    var el = mkInput();
+    var sc = new SmartCombo(el, { options: opts(30) });
+    el.focus();
+    window.dispatchEvent(new Event("resize"));
+    await sleep(30);
+    ok(sc._isOpen(), "resize 不应关掉浮层");
+    var r = sc.getPopup().getBoundingClientRect();
+    ok(r.left >= 0 && r.right <= document.documentElement.clientWidth + 1, "横向仍在视口内");
+    sc.destroy();
+  });
+
+  /* ------------------------------------------------ runner */
+
+  var listEl = document.getElementById("list");
+  var sumEl = document.getElementById("summary");
+
+  (async function run() {
+    var pass = 0, fail = 0;
+    for (var i = 0; i < queue.length; i++) {
+      var c = queue[i];
+      var li = document.createElement("li");
+      try {
+        await c.fn();
+        li.className = "ok";
+        li.textContent = "✓ " + c.name;
+        pass++;
+      } catch (err) {
+        li.className = "no";
+        li.innerHTML = "✗ " + c.name + " — <code>" + String(err && err.message || err) + "</code>";
+        fail++;
+        if (err && err.stack && console) console.error(c.name, err);
+      }
+      listEl.appendChild(li);
+    }
+    sumEl.className = fail ? "fail" : "pass";
+    sumEl.textContent = (fail ? "FAIL" : "PASS") + " — " + pass + " 通过 / " + fail + " 失败 / 共 "
+      + queue.length;
+    window.__RESULT = { pass: pass, fail: fail, total: queue.length };
+  })();
+})();
+</script>
+</body>
+</html>

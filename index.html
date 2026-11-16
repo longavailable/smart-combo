@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartCombo · 文本输入 + 下拉（可选新建）</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="smart-combo.css">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #fff;
+    --fg: #1f2733;
+    --fg-muted: #6b7686;
+    --line: #e3e6eb;
+    --primary: #2563eb;
+    --primary-soft: #eef4ff;
+    --code-bg: #f3f5f8;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(23, 32, 48, .05), 0 8px 24px rgba(23, 32, 48, .06);
+  }
+  html[data-theme="dark"] {
+    --bg: #12161d;
+    --card: #1a1f28;
+    --fg: #e6e9ef;
+    --fg-muted: #8d98a9;
+    --line: #2a3341;
+    --primary: #6aa5ff;
+    --primary-soft: #22334d;
+    --code-bg: #151a22;
+    --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    padding: 32px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1080px; margin: 0 auto; }
+
+  header.top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 26px;
+  }
+  header.top h1 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+  header.top p { margin: 6px 0 0; color: var(--fg-muted); font-size: 13px; }
+  .badge {
+    display: inline-block; margin-left: 8px; padding: 1px 7px; font-size: 11px;
+    font-weight: 600; color: var(--primary); background: var(--primary-soft);
+    border-radius: 99px; vertical-align: 3px;
+  }
+  .seg {
+    display: inline-flex; padding: 3px; gap: 2px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 99px;
+  }
+  .seg button {
+    border: 0; background: transparent; color: var(--fg-muted); font: inherit;
+    font-size: 12px; padding: 4px 12px; border-radius: 99px; cursor: pointer;
+  }
+  .seg button.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px;
+  }
+  .card h2 {
+    margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .tag {
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 3px 7px; border-radius: 5px; background: var(--primary-soft); color: var(--primary);
+  }
+  .card .hint { margin: 0 0 14px; color: var(--fg-muted); font-size: 12.5px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field > label { font-size: 12px; color: var(--fg-muted); }
+  .field .sc-wrap { width: 260px; max-width: 100%; }
+
+  .out {
+    margin-top: 12px; padding: 10px 12px; background: var(--code-bg);
+    border-radius: 8px; font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--fg-muted); word-break: break-all;
+  }
+  .out b { color: var(--primary); font-weight: 600; }
+
+  table.demo { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.demo th {
+    text-align: left; font-weight: 600; font-size: 12px; color: var(--fg-muted);
+    padding: 6px 8px; border-bottom: 1px solid var(--line);
+  }
+  table.demo td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.demo td .sc-wrap { width: 100%; }
+  table.demo tr:last-child td { border-bottom: 0; }
+  select.demo {
+    height: 30px; padding: 0 6px; font: inherit; font-size: 13px; color: var(--fg);
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  }
+
+  .log {
+    position: sticky; top: 20px; max-height: 60vh; overflow: auto;
+    font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .log div { padding: 2px 0; border-bottom: 1px dashed var(--line); color: var(--fg-muted); }
+  .log div:last-child { border-bottom: 0; }
+  .log .k { color: var(--primary); }
+  .log .v { color: var(--fg); }
+
+  pre.snippet {
+    margin: 0; padding: 12px 14px; overflow-x: auto; background: var(--code-bg);
+    border-radius: 8px; white-space: pre-wrap; word-break: break-word;
+    font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--fg);
+  }
+  pre.snippet .c { color: var(--fg-muted); }
+  pre.snippet .s { color: #0a7d55; }
+  html[data-theme="dark"] pre.snippet .s { color: #6cd39c; }
+
+  code {
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--code-bg); border-radius: 4px; padding: 1px 5px;
+    word-break: break-all;
+  }
+  .card .hint a { color: var(--primary); text-decoration: none; }
+  .card .hint a:hover { text-decoration: underline; }
+
+  kbd {
+    display: inline-block; padding: 1px 5px; font: 11px/1.5 ui-monospace, monospace;
+    color: var(--fg); background: var(--code-bg); border: 1px solid var(--line);
+    border-bottom-width: 2px; border-radius: 4px;
+  }
+  .keys { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--fg-muted); }
+  footer { margin-top: 28px; color: var(--fg-muted); font-size: 12px; text-align: center; }
+  footer a { color: var(--primary); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <div>
+      <h1>SmartCombo <span class="badge">v0.1.0</span></h1>
+      <p>一个输入框 + 一个下拉。零依赖、无构建，选中的是「值」，看见的是「标签」。</p>
+    </div>
+    <div class="seg" id="theme-seg">
+      <button data-theme-btn="light" class="on">浅色</button>
+      <button data-theme-btn="dark">深色</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <main>
+
+      <section class="card">
+        <h2>模式 A · 文本输入 + 下拉选择 <span class="tag">mode: "select"</span></h2>
+        <p class="hint">点进去就出全部候选，敲字即筛选；只能选清单里的值，敲了清单外的内容会在失焦时退回上一个有效值。<b>提交的是代码，看见的是名字。</b></p>
+        <div class="row">
+          <div class="field">
+            <label>城市（value = 行政区划代码）</label>
+            <input id="demo-select" placeholder="城市名或代码">
+          </div>
+          <div class="field">
+            <label>带清空按钮</label>
+            <input id="demo-clear" placeholder="可清空">
+          </div>
+        </div>
+        <div class="out" id="out-select">value: <b>—</b></div>
+      </section>
+
+      <section class="card">
+        <h2>模式 B · 文本输入 + 下拉 + 新建选项 <span class="tag">mode: "create"</span></h2>
+        <p class="hint">清单里没有的标签直接敲进去，下拉里会多出一行「＋ 新建标签 “xxx”」，回车即成为新选项并留在清单里 —— 后面再打开就在候选之中了。</p>
+        <div class="row">
+          <div class="field">
+            <label>项目标签（预设若干常用标签）</label>
+            <input id="demo-create" placeholder="选择或输入新标签">
+          </div>
+          <div class="field">
+            <label>自定义新建文案</label>
+            <input id="demo-create2" placeholder="可自定义 createLabel">
+          </div>
+        </div>
+        <div class="out" id="out-create">value: <b>—</b></div>
+      </section>
+
+      <section class="card">
+        <h2>每行独立候选（联动表单）<span class="tag">setOptions()</span></h2>
+        <p class="hint">「部门」一变，「审批人」的候选跟着整体换掉 —— 每行一个实例、选项按行下发。这是筛选器、明细表、审批流里最常见的用法。</p>
+        <table class="demo">
+          <thead><tr><th style="width:34%">部门</th><th style="width:34%">审批人</th><th>切换后结果</th></tr></thead>
+          <tbody id="tbody-demo"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>异步候选源 <span class="tag">options: (q) =&gt; Promise</span></h2>
+        <p class="hint">候选来自接口时把 options 写成函数即可：打开下拉时带当前关键字请求，返回结果覆盖候选，期间显示「加载中…」，过期响应自动丢弃。</p>
+        <div class="row">
+          <div class="field">
+            <label>选择成员（模拟 400ms 远程检索）</label>
+            <input id="demo-async" placeholder="输入中文名或拼音">
+          </div>
+        </div>
+        <div class="out" id="out-async">value: <b>—</b></div>
+      </section>
+
+      <section class="card">
+        <h2>网络引入 <span class="tag">jsDelivr</span></h2>
+        <p class="hint">两条标签就够了 —— 不用 <code>npm install</code>，也不用构建。脚本挂在全局 <code>SmartCombo</code> 上，<b>不需要</b> <code>type="module"</code>。生产环境把版本写死（<code>@0.1.0</code>）；<code>@latest</code> 只适合试玩。</p>
+        <pre class="snippet"><span class="c">&lt;!-- 样式 + 脚本，就这两条 --&gt;</span>
+&lt;link rel=<span class="s">"stylesheet"</span> href=<span class="s">"https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.css"</span>&gt;
+&lt;script src=<span class="s">"https://cdn.jsdelivr.net/npm/smart-combo@0.1.0/smart-combo.js"</span>&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  new SmartCombo(<span class="s">"#city"</span>, { options: [<span class="s">"北京"</span>, <span class="s">"上海"</span>, <span class="s">"深圳"</span>] });
+&lt;/script&gt;</pre>
+        <p class="hint" style="margin:12px 0 0">
+          还没发到 npm 时，从 GitHub 取同一份文件即可（推完仓库就能用）：
+          <code>https://cdn.jsdelivr.net/gh/longavailable/smart-combo@v0.1.0/smart-combo.js</code>。
+          可复制的最小页面见 <a href="examples/cdn.html">examples/cdn.html</a>。
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>最小用法</h2>
+        <pre class="snippet"><span class="c">// 模式 A：只能选清单里的</span>
+new SmartCombo(<span class="s">"#city"</span>, {
+  options: [
+    { value: <span class="s">"310000"</span>, label: <span class="s">"上海"</span> },
+    { value: <span class="s">"440300"</span>, label: <span class="s">"深圳"</span> }
+  ],
+  mode: <span class="s">"select"</span>,
+  placeholder: <span class="s">"选择城市"</span>,
+  onChange: (value, item) =&gt; console.log(value)   <span class="c">// "310000"，不是 "上海"</span>
+});
+
+<span class="c">// 模式 B：能选，也能新建</span>
+new SmartCombo(<span class="s">"#tags"</span>, {
+  options: [<span class="s">"前端"</span>, <span class="s">"后端"</span>, <span class="s">"设计"</span>],
+  mode: <span class="s">"create"</span>,
+  name: <span class="s">"tag"</span>,                       <span class="c">// 随表单提交 value</span>
+  createLabel: <span class="s">"＋ 新建标签 “{value}”"</span>,
+  onCreate: (text) =&gt; console.log(<span class="s">"新建了"</span>, text)
+});</pre>
+      </section>
+
+    </main>
+
+    <aside>
+      <section class="card log-card">
+        <h2>事件日志</h2>
+        <p class="hint">每次 change / select / create，都会追加一行。</p>
+        <div class="log" id="log"><div>等待操作…</div></div>
+      </section>
+
+      <section class="card">
+        <h2>键盘</h2>
+        <div class="keys">
+          <span><kbd>↓</kbd> 打开 / 下移</span>
+          <span><kbd>↑</kbd> 上移</span>
+          <span><kbd>Enter</kbd> 选中</span>
+          <span><kbd>Tab</kbd> 提交并离开</span>
+          <span><kbd>Esc</kbd> 关闭并还原</span>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    MIT License · 单文件 <code>smart-combo.js</code> + <code>smart-combo.css</code> ·
+    <a href="examples/cdn.html">CDN 引入示例</a> ·
+    <a href="test/browser.html">浏览器自测页</a>
+  </footer>
+</div>
+
+<script src="smart-combo.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 演示数据 ---------- */
+
+  /* 城市：value 是行政区划代码，label 才是人名看的那半边 */
+  var CITIES = [
+    { value: "110000", label: "北京" },
+    { value: "310000", label: "上海" },
+    { value: "440100", label: "广州" },
+    { value: "440300", label: "深圳" },
+    { value: "330100", label: "杭州" },
+    { value: "320100", label: "南京" },
+    { value: "510100", label: "成都" },
+    { value: "420100", label: "武汉" },
+    { value: "610100", label: "西安" },
+    { value: "370200", label: "青岛" }
+  ];
+
+  /* 标签：预设一批，其余靠"新建"补 */
+  var TAGS = ["前端", "后端", "设计", "测试", "运维", "文档", "性能", "安全", "重构", "依赖升级"];
+
+  /* 部门 → 审批人 */
+  var DEPTS = [
+    { name: "产品部", people: ["张伟", "李娜", "王芳", "刘洋", "陈晨"] },
+    { name: "研发部", people: ["赵磊", "周航", "吴倩", "郑雨", "孙楠", "马骁"] },
+    { name: "设计部", people: ["林可", "何川", "徐宁"] }
+  ];
+
+  /* 成员目录：异步源，中英文都能搜 */
+  var MEMBERS = [
+    "张伟 (zhangwei)", "赵磊 (zhaolei)", "周航 (zhouhang)", "吴倩 (wuqian)",
+    "郑雨 (zhengyu)", "孙楠 (sunnan)", "林可 (linke)", "何川 (hechuan)",
+    "Alice Chen (achen)", "Bob Li (bli)", "Carol Wang (cwang)", "David Liu (dliu)"
+  ];
+
+  /* ---------- 小的输出/日志工具 ---------- */
+
+  var logBox = document.getElementById("log");
+  var logCount = 0;
+  function log(kind, text) {
+    if (logCount++ === 0) logBox.textContent = "";
+    var row = document.createElement("div");
+    var k = document.createElement("span");
+    k.className = "k";
+    k.textContent = kind + " ";
+    var v = document.createElement("span");
+    v.className = "v";
+    v.textContent = text;
+    row.appendChild(k);
+    row.appendChild(v);
+    logBox.insertBefore(row, logBox.firstChild);
+    while (logBox.childNodes.length > 60) logBox.removeChild(logBox.lastChild);
+  }
+
+  function show(id, value) {
+    document.getElementById(id).innerHTML = "value: <b>"
+      + (value === "" || value == null ? "—" : String(value).replace(/</g, "&lt;")) + "</b>";
+  }
+
+  /* ---------------- 模式 A：城市 ---------------- */
+  var selA = new SmartCombo("#demo-select", {
+    options: CITIES,
+    mode: "select",
+    maxRender: 120,
+    onChange: function (v) {
+      show("out-select", v);
+      log("change", v === "" ? "(空)" : v);
+    },
+    onInvalid: function (text) {
+      log("invalid", "「" + text + "」不在城市清单里，已退回");
+    }
+  });
+
+  new SmartCombo("#demo-clear", {
+    options: CITIES,
+    mode: "select",
+    clearable: true,
+    placeholder: "可清空",
+    onChange: function (v) { log("change", "clearable → " + (v === "" ? "(空)" : v)); }
+  });
+
+  /* ---------------- 模式 B：标签 ---------------- */
+  var selB = new SmartCombo("#demo-create", {
+    options: TAGS,
+    mode: "create",
+    placeholder: "选择或输入新标签",
+    createLabel: "＋ 新建标签 “{value}”",
+    onChange: function (v, item) {
+      show("out-create", v + (item && item.created ? "（新建）" : ""));
+      log("change", v + (item && item.created ? " · 新建" : ""));
+    },
+    onCreate: function (text) {
+      log("create", "标签「" + text + "」已加入候选（当前 " + selB.getOptions().length + " 项）");
+    }
+  });
+
+  new SmartCombo("#demo-create2", {
+    options: TAGS,
+    mode: "create",
+    createLabel: function (t) { return "＋ 添加 “" + t + "”"; },
+    onChange: function (v) { log("change", "自定义文案 → " + v); }
+  });
+
+  /* ---------------- 每行独立候选：部门 → 审批人 ---------------- */
+  var tbody = document.getElementById("tbody-demo");
+
+  [0, 1, 2].forEach(function (i) {
+    var tr = document.createElement("tr");
+
+    var td1 = document.createElement("td");
+    var sel = document.createElement("select");
+    sel.className = "demo";
+    DEPTS.forEach(function (d, k) {
+      var o = document.createElement("option");
+      o.value = String(k);
+      o.textContent = d.name + "（" + d.people.length + " 人）";
+      sel.appendChild(o);
+    });
+    sel.value = String(i % DEPTS.length);
+    td1.appendChild(sel);
+
+    var td2 = document.createElement("td");
+    var inp = document.createElement("input");
+    inp.placeholder = "选择审批人";
+    td2.appendChild(inp);
+
+    var td3 = document.createElement("td");
+    td3.style.color = "var(--fg-muted)";
+    td3.style.fontSize = "12px";
+    td3.textContent = "—";
+
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    tbody.appendChild(tr);
+
+    var idx = Number(sel.value);
+    var combo = new SmartCombo(inp, {
+      options: DEPTS[idx].people,
+      mode: "select",
+      onChange: function (v) {
+        td3.textContent = v === "" ? "—" : DEPTS[idx].name + " · " + v;
+        log("change", "第 " + (i + 1) + " 行 → " + (v || "(空)"));
+      }
+    });
+    sel.addEventListener("change", function () {
+      idx = Number(sel.value);
+      combo.setValue("", { fire: true });          // 换了部门：旧审批人不属于新部门
+      combo.setOptions(DEPTS[idx].people);         // 候选整体换掉
+      td3.textContent = "—";
+      log("setOptions", DEPTS[idx].name + " · " + DEPTS[idx].people.length + " 人");
+    });
+  });
+
+  /* ---------------- 异步候选源：成员检索 ---------------- */
+  new SmartCombo("#demo-async", {
+    options: function (query) {
+      return new Promise(function (resolve) {
+        log("fetch", "远程检索 “" + (query || "") + "”");
+        setTimeout(function () {
+          var q = String(query || "").toLowerCase();
+          resolve(MEMBERS.filter(function (s) { return s.toLowerCase().indexOf(q) !== -1; }));
+        }, 400);
+      });
+    },
+    mode: "select",
+    placeholder: "输入中文名或拼音",
+    onChange: function (v) { show("out-async", v); log("change", v || "(空)"); }
+  });
+
+  /* ---------------- 主题 ---------------- */
+  var seg = document.getElementById("theme-seg");
+  seg.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-theme-btn]");
+    if (!btn) return;
+    document.documentElement.setAttribute("data-theme", btn.getAttribute("data-theme-btn"));
+    Array.prototype.forEach.call(seg.querySelectorAll("button"), function (b) {
+      b.classList.toggle("on", b === btn);
+    });
+  });
+})();
+</script>
+</body>
+</html>
