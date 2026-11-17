@@ -1,6 +1,6 @@
 {
   "name": "smart-combo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-dependency combobox: one text input + one filterable dropdown, with an optional \"create a new option\" mode.",
   "main": "smart-combo.js",
   "style": "smart-combo.css",
