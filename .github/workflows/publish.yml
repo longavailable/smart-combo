@@ -137,9 +137,14 @@ jobs:
           VERSION: ${{ needs.check.outputs.version }}
         run: |
           set -euo pipefail
+          # 新增：设置git身份
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           if git ls-remote --tags origin "v$VERSION" | grep -q .; then
             echo "tag v$VERSION 已存在，跳过"
           else
             git tag -a "v$VERSION" -m "smart-combo v$VERSION"
             git push origin "v$VERSION"
           fi
+
